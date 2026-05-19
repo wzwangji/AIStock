@@ -9,7 +9,7 @@
 - **数据库**：Supabase (PostgreSQL)
 - **AI**：DeepSeek API (OpenAI 兼容)
 - **股票数据**：Finnhub API
-- **部署**：Render.com
+- **部署**：Vercel
 
 ## 功能列表
 
@@ -105,20 +105,19 @@ npm run dev
 }
 ```
 
-## 部署到 Render
+## 部署到 Vercel
 
-部署顺序：**Supabase → backend → frontend**。先部署 backend 拿到域名，再用该域名配置 frontend。
+部署顺序：**Supabase → backend → frontend**。建议在 Vercel 创建两个 Project：一个后端 Project，Root Directory 指向 `backend`；一个前端 Project，Root Directory 指向 `frontend`。
 
-### 后端（Web Service）
+### 后端（Serverless Function）
 
-1. Render Dashboard → New → Web Service → 连接仓库
+1. Vercel Dashboard → Add New → Project → 选择仓库
 2. 配置：
    - **Name**: `aistock-backend`
    - **Root Directory**: `backend`
-   - **Runtime**: Node
-   - **Build Command**: `npm install`
-   - **Start Command**: `npm start`
-   - **Health Check Path**: `/api/health`
+   - **Framework Preset**: Other
+   - **Build Command**: 留空或 `npm install`
+   - **Output Directory**: 留空
 3. Environment Variables：
    ```
    NODE_ENV=production
@@ -128,34 +127,34 @@ npm run dev
    DEEPSEEK_MODEL=deepseek-chat
    SUPABASE_URL=<your supabase project url>
    SUPABASE_SERVICE_ROLE_KEY=<your service_role key>
-   CORS_ORIGIN=<frontend Render URL，先填 * 部署完再回填>
+   CORS_ORIGIN=*
    ```
-4. 部署后记录 backend URL，例如 `https://aistock-backend.onrender.com`
+4. 部署后访问 `/api/health`，例如 `https://aistock-backend.vercel.app/api/health`
 
-### 前端（Static Site）
+后端目录已包含 `backend/vercel.json` 和 `backend/api/index.js`，Vercel 会把 Express app 作为 Serverless Function 运行。
 
-1. Render Dashboard → New → Static Site → 连接仓库
+### 前端（Vite Static Site）
+
+1. Vercel Dashboard → Add New → Project → 选择同一个仓库
 2. 配置：
    - **Name**: `aistock-frontend`
    - **Root Directory**: `frontend`
-   - **Build Command**: `npm install && npm run build`
-   - **Publish Directory**: `dist`
+   - **Framework Preset**: Vite
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
 3. Environment Variables：
    ```
-   VITE_API_BASE_URL=https://aistock-backend.onrender.com
+   VITE_API_BASE_URL=https://aistock-backend.vercel.app
    ```
-4. Redirects/Rewrites（SPA 路由必需）：
-   - Source: `/*`
-   - Destination: `/index.html`
-   - Action: Rewrite
+4. 前端目录已包含 `frontend/vercel.json`，用于支持 React Router 刷新页面不 404。
 
 ### 回填 CORS
 
-前端部署完拿到域名（如 `https://aistock-frontend.onrender.com`）后，回到 backend 的 Environment 把 `CORS_ORIGIN` 改成该域名，Render 会自动重新部署。
+前端部署完拿到域名（如 `https://aistock-frontend.vercel.app`）后，回到后端 Project 的 Environment Variables，把 `CORS_ORIGIN` 改成该域名并重新部署后端。
 
 ## 已知限制 / 后续改进
 
-- Render 免费层 backend 闲置 15 分钟会冷启动，首次请求慢约 30s
+- Vercel Serverless Function 有最大执行时长限制，AI 分析接口可能受套餐限制影响
 - Finnhub 免费层只支持美股
 - 历史记录目前不区分用户，公开可见
 - 监控数据保留无清理策略，建议加定时任务定期归档/删除旧日志
