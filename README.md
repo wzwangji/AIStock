@@ -86,6 +86,64 @@ npm run dev
 
 见 [supabase/schema.sql](supabase/schema.sql)。四张表全部启用 RLS，策略为 `for all using (true)`（无认证场景）。
 
+## 交付说明
+
+### 1. 在线访问 URL
+
+- 前端在线地址：`https://aistock-frontend-tau.vercel.app`
+- 后端健康检查：`https://aistock-backend.vercel.app/api/health`
+- 后端行情接口示例：`https://aistock-backend.vercel.app/api/stock/AAPL`
+
+### 2. Prompt 截图/代码
+
+Prompt 代码位于 [backend/src/services/llmService.js](backend/src/services/llmService.js)，核心约束如下：
+
+```js
+const SYSTEM_PROMPT = `You are a professional equity analyst. You will receive a JSON snapshot of a stock's market data and company profile.
+
+Return ONLY a single JSON object — no markdown, no code fences, no commentary — that strictly matches this schema:
+
+{
+  "summary": string,
+  "sentiment": "Bullish" | "Neutral" | "Bearish",
+  "risk_level": "Low" | "Medium" | "High",
+  "key_factors": string[],
+  "suggestion": string
+}
+
+Rules:
+- Output MUST be valid JSON parseable by JSON.parse.
+- Do NOT include any text outside the JSON object.
+- sentiment and risk_level MUST be one of the allowed enum values exactly.
+- key_factors MUST be an array of strings.
+- summary, key_factors and suggestion MUST be written in Simplified Chinese.`;
+```
+
+接口调用时同时传入 `response_format: { type: 'json_object' }`，并在解析层使用 `JSON.parse`、正则回退提取和一次自动重试，确保 LLM 尽量只返回可解析 JSON。
+
+### 3. Debug 记录
+
+问题：Vercel 部署后，后端 `https://aistock-backend.vercel.app/api/health` 和 `https://aistock-backend.vercel.app/api/stock/AAPL` 均正常，但前端页面点击“获取行情”显示“无法连接后端服务”。
+
+排查：
+
+1. 直接访问后端健康检查返回 `{"ok":true}`，说明后端部署成功。
+2. 直接访问 `/api/stock/AAPL` 返回行情 JSON，说明 Finnhub 环境变量和后端路由正常。
+3. 前端仍报连接失败，说明问题在前端构建环境或浏览器跨域，而不是后端业务代码。
+
+修复：
+
+1. 在 Vercel 前端项目 `aistock-frontend` 的 Environment Variables 中添加：
+   ```txt
+   VITE_API_BASE_URL=https://aistock-backend.vercel.app
+   ```
+2. 重新部署前端，因为 Vite 的 `VITE_` 环境变量是在构建时写入静态资源的。
+3. 在 Vercel 后端项目 `aistock-backend` 中把 `CORS_ORIGIN` 从临时的 `*` 改为前端域名：
+   ```txt
+   CORS_ORIGIN=https://aistock-frontend-tau.vercel.app
+   ```
+4. 重新部署后端，使新的 CORS 配置生效。
+
 ## LLM 严格 JSON 约束
 
 `backend/src/services/llmService.js` 采用三重保障：
